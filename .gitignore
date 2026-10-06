@@ -9,6 +9,10 @@ desktop.ini
 tools/.cache/
 _meta/*.bak
 
+# 授权令牌，绝不入库
+tools/.ima_token
+*.token
+
 # 不推大二进制（知识库导出以 Markdown 为主）
 *.exe
 *.dll
