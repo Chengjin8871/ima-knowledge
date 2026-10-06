@@ -1,0 +1,19 @@
+# 临时与缓存
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 导出器的工作缓存
+tools/.cache/
+_meta/*.bak
+
+# 不推大二进制（知识库导出以 Markdown 为主）
+*.exe
+*.dll
+*.zip
+*.7z
+*.rar
+*.mp4
+*.mp3
