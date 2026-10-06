@@ -1,0 +1,106 @@
+{
+  "exported_at": "2026-10-07 00:45:00",
+  "source": "ima 个人知识库（ima.qq.com）",
+  "repo": "https://github.com/Chengjin8871/ima-knowledge",
+  "knowledge_bases": [
+    {
+      "id": "7511827202186705",
+      "name": "GitHub",
+      "note": "ima 里是独立知识库，不是某个库下的文件夹"
+    },
+    {
+      "id": "7513204016024197",
+      "name": "数据结构",
+      "note": "根目录下有「第一节习题」（空）和「第二节习题」两个文件夹"
+    }
+  ],
+  "total_items": 9,
+  "items": [
+    {
+      "media_id": "markdown_943ccc0249a8addee7a45a97d8a67a91_d634800133a75d7f9178624afaf591137511827202186705",
+      "title": "GitHub Trending 简报 2026-10-06.md",
+      "kb": "GitHub",
+      "folder": "",
+      "type": "MARKDOWN",
+      "size": 8722,
+      "path": "Github/GitHub Trending 简报 2026-10-06.md"
+    },
+    {
+      "media_id": "markdown_943ccc0249a8addee7a45a97d8a67a91_73cf999f0324cc70d8027af50956a4f97511827202186705",
+      "title": "GitHub Trending 简报 2026-10-05.md",
+      "kb": "GitHub",
+      "folder": "",
+      "type": "MARKDOWN",
+      "size": 8625,
+      "path": "Github/GitHub Trending 简报 2026-10-05.md"
+    },
+    {
+      "media_id": "markdown_943ccc0249a8addee7a45a97d8a67a91_ad464f1b2061054b55596847a09a6e2f7511827202186705",
+      "title": "GitHub Trending 简报 2026-10-04.md",
+      "kb": "GitHub",
+      "folder": "",
+      "type": "MARKDOWN",
+      "size": 11971,
+      "path": "Github/GitHub Trending 简报 2026-10-04.md"
+    },
+    {
+      "media_id": "markdown_52539cfd0da842b491163414f04b9710_20710e913b474e031611a81a6ba916397511827202186705",
+      "title": "GitHub Trending 简报 2026-10-02",
+      "kb": "GitHub",
+      "folder": "",
+      "type": "MARKDOWN",
+      "size": 9899,
+      "path": "Github/GitHub Trending 简报 2026-10-02.md"
+    },
+    {
+      "media_id": "note_943ccc0249a8addee7a45a97d8a67a91_75132052743221057513204016024197",
+      "title": "长度对齐法",
+      "kb": "数据结构",
+      "folder": "第二节习题/第 5 题",
+      "type": "NOTE",
+      "size": 884,
+      "path": "数据结构/第二节习题/第 5 题/长度对齐法.md"
+    },
+    {
+      "media_id": "note_943ccc0249a8addee7a45a97d8a67a91_75132055092038287513204016024197",
+      "title": "双扫描指针边扫边找公共结点",
+      "kb": "数据结构",
+      "folder": "第二节习题/第 5 题",
+      "type": "NOTE",
+      "size": 1340,
+      "path": "数据结构/第二节习题/第 5 题/双扫描指针边扫边找公共结点.md"
+    },
+    {
+      "media_id": "note_943ccc0249a8addee7a45a97d8a67a91_75132058741302517513204016024197",
+      "title": "哈希集合法  C++语法",
+      "kb": "数据结构",
+      "folder": "第二节习题/第 5 题",
+      "type": "NOTE",
+      "size": 1142,
+      "path": "数据结构/第二节习题/第 5 题/哈希集合法 C++语法.md"
+    },
+    {
+      "media_id": "note_943ccc0249a8addee7a45a97d8a67a91_75132062264282697513204016024197",
+      "title": "暴力枚举法（不建议用）",
+      "kb": "数据结构",
+      "folder": "第二节习题/第 5 题",
+      "type": "NOTE",
+      "size": 876,
+      "path": "数据结构/第二节习题/第 5 题/暴力枚举法（不建议用）.md"
+    },
+    {
+      "media_id": "note_943ccc0249a8addee7a45a97d8a67a91_75132341059695167513204016024197",
+      "title": "归并思想求两链表交集",
+      "kb": "数据结构",
+      "folder": "第二节习题/第 9 题",
+      "type": "NOTE",
+      "size": 2082,
+      "path": "数据结构/第二节习题/第 9 题/归并思想求两链表交集.md"
+    }
+  ],
+  "notes": [
+    "「数据结构」库根目录下的「第一节习题」为空文件夹，无条目。",
+    "「第二节习题」下第 1/2/3/4/6/7/8/10 题均为空文件夹，只有第 5 题（4 条）和第 9 题（1 条）有内容。",
+    "笔记类条目的代码在 ima 中换行信息不完整，导出时按原意恢复了缩进与代码块格式；两处结尾疑似缺闭合大括号的已在文件头标注，未擅自补全。"
+  ]
+}
