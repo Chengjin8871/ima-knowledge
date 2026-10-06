@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 r"""
-ima 云端导出器：把 ima 个人知识库里指定文件夹的条目拉下来，写成 Markdown。
+ima 云端导出器：把 ima 知识库里的条目拉下来写成 Markdown，并生成导出清单。
 
-数据来源是 ima 的 MCP 端点（https://ima.qq.com/mcp，streamableHttp）。
-工具名不硬编码 —— 先 initialize + tools/list，按关键词在服务端下发的
-工具表里发现对应能力，再用官方 inputSchema 调用。
+调用链路（2026-10-07 在真实账号上手工跑通一遍，工具名与参数均为实测值）：
+    get_knowledge_base_list  ->  拿到 knowledge_base_id
+    get_knowledge_list       ->  递归展开文件夹，拿到 media_id
+    fetch_media_content      ->  取正文
 
-令牌获取方式（任选其一，优先级从高到低）:
+令牌获取（优先级从高到低）：
     1. 环境变量 IMA_TOKEN
-    2. 本目录下的 .ima_token 文件（纯文本，已在 .gitignore 中排除）
+    2. 本目录下的 .ima_token 文件（已在 .gitignore 中排除，不会入库）
 
 用法:
     python tools/ima_export.py --repo D:\ima-knowledge
     python tools/ima_export.py --repo D:\ima-knowledge --only 数据结构
+    python tools/ima_export.py --repo D:\ima-knowledge --list-tools
 """
 
 import argparse
@@ -22,13 +24,9 @@ import json
 import os
 import re
 import sys
-import uuid
-
-try:
-    import urllib.request
-    import urllib.error
-except ImportError:  # pragma: no cover
-    urllib = None
+import time
+import urllib.error
+import urllib.request
 
 for stream in (sys.stdout, sys.stderr):
     try:
@@ -38,10 +36,16 @@ for stream in (sys.stdout, sys.stderr):
 
 MCP_URL = "https://ima.qq.com/mcp"
 
-# 目标：ima 个人知识库下的这两个文件夹
-TARGET_FOLDERS = ["数据结构", "Github"]
+# ima 里的知识库名 -> 本仓库里的目录名
+# 注意：这两个在 ima 里是【各自独立的知识库】，不是某个库下面的文件夹。
+TARGET_KBS = {
+    "GitHub": "Github",
+    "数据结构": "数据结构",
+}
 
-# Windows 文件名非法字符
+# media_type == 99 表示文件夹
+MEDIA_TYPE_FOLDER = 99
+
 ILLEGAL = r'[\\/:*?"<>|\r\n\t]'
 
 
@@ -63,7 +67,7 @@ def safe_name(title: str, used: set) -> str:
 
 
 class McpClient:
-    """极简 MCP streamableHttp 客户端（无第三方依赖）。"""
+    """极简 MCP streamableHttp 客户端（只用标准库）。"""
 
     def __init__(self, url: str, token: str):
         self.url = url
@@ -98,7 +102,6 @@ class McpClient:
                 self.session_id = sid
             raw = resp.read().decode("utf-8", errors="replace")
 
-        # 可能返回 SSE，也可能直接是 JSON
         for line in raw.splitlines():
             line = line.strip()
             if line.startswith("data:"):
@@ -113,8 +116,8 @@ class McpClient:
         except json.JSONDecodeError:
             return {"error": {"message": f"无法解析响应: {raw[:300]}"}}
 
-    def initialize(self) -> bool:
-        r = self._post(
+    def initialize(self):
+        self._post(
             {
                 "method": "initialize",
                 "params": {
@@ -124,52 +127,26 @@ class McpClient:
                 },
             }
         )
-        if "error" in r:
-            raise RuntimeError(f"initialize 失败: {r['error']}")
-        # 通知服务端初始化完成
         self._post({"method": "notifications/initialized", "params": {}})
-        return True
 
     def list_tools(self) -> list:
         r = self._post({"method": "tools/list", "params": {}})
-        if "error" in r:
-            raise RuntimeError(f"tools/list 失败: {r['error']}")
         return r.get("result", {}).get("tools", [])
 
-    def call_tool(self, name: str, arguments: dict) -> dict:
+    def call(self, name: str, arguments: dict) -> dict:
+        """调工具并解包 content[]。"""
         r = self._post(
             {"method": "tools/call", "params": {"name": name, "arguments": arguments}}
         )
         if "error" in r:
-            raise RuntimeError(f"{name} 调用失败: {r['error']}")
-        return r.get("result", {})
-
-
-def find_tool(tools: list, must: list, must_not: list = None) -> dict | None:
-    """按关键词在工具表里发现能力（工具名以服务端下发为准）。"""
-    must_not = must_not or []
-    for t in tools:
-        blob = (t.get("name", "") + " " + t.get("description", "")).lower()
-        if all(m.lower() in blob for m in must) and not any(
-            m.lower() in blob for m in must_not
-        ):
-            return t
-    return None
-
-
-def unwrap(result: dict):
-    """MCP 工具结果是 content[] 列表，取出里面的文本/JSON。"""
-    out = []
-    for c in result.get("content", []):
-        if c.get("type") == "text":
-            out.append(c["text"])
-    if not out:
-        return result
-    text = "\n".join(out)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return text
+            raise RuntimeError(f"{name} 失败: {r['error']}")
+        res = r.get("result", {})
+        texts = [c["text"] for c in res.get("content", []) if c.get("type") == "text"]
+        blob = "\n".join(texts)
+        try:
+            return json.loads(blob)
+        except json.JSONDecodeError:
+            return {"raw": blob}
 
 
 def load_token(tools_dir: str) -> str | None:
@@ -185,11 +162,33 @@ def load_token(tools_dir: str) -> str | None:
     return None
 
 
+def walk_folder(client, kb_id: str, folder_id: str, prefix: str, out: list) -> None:
+    """递归展开知识库（或文件夹）下的所有条目。"""
+    args = {
+        "knowledge_base_id": kb_id,
+        "limit": 50,
+        "cursor": "",
+        "sort_type": "UPDATE_TS_DESC_SORT_TYPE",
+    }
+    if folder_id:
+        args["folder_id"] = folder_id
+
+    data = client.call("get_knowledge_list", args)
+    for item in data.get("knowledge_list", []):
+        mt = item.get("media_type")
+        title = item.get("title", "")
+        if mt == MEDIA_TYPE_FOLDER or item.get("folder_info"):
+            fid = (item.get("folder_info") or {}).get("folder_id") or item.get("media_id")
+            walk_folder(client, kb_id, fid, f"{prefix}/{title}", out)
+        else:
+            out.append({"item": item, "folder": prefix})
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", required=True)
-    ap.add_argument("--only", nargs="*", default=None, help="只导出指定文件夹")
-    ap.add_argument("--list-tools", action="store_true", help="只列出可用工具后退出")
+    ap.add_argument("--only", nargs="*", default=None, help="只导出指定知识库（ima 里的库名）")
+    ap.add_argument("--list-tools", action="store_true")
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo)
@@ -206,10 +205,9 @@ def main() -> int:
         print("    1) 设置环境变量 IMA_TOKEN")
         print(f"    2) 把令牌写入 {os.path.join(tools_dir, '.ima_token')}")
         print()
-        print("  拿到令牌后重跑本脚本即可。")
+        print("  仓库里现有的 9 个条目是 2026-10-07 经 WorkBuddy 的 ima 连接器导出的；")
+        print("  日常新增内容后直接双击 sync.bat 推送即可，不必每次重跑本脚本。")
         return 1
-
-    folders = args.only or TARGET_FOLDERS
 
     print()
     print("  ima 云端导出")
@@ -222,38 +220,95 @@ def main() -> int:
         tools = client.list_tools()
     except Exception as exc:
         print(f"  [错误] 连接失败: {exc}")
-        print("  常见原因：令牌过期。请重新获取令牌后重试。")
+        print("  通常是令牌过期，重新获取后重试。")
         return 1
 
-    print(f"  可用工具: {len(tools)} 个")
     if args.list_tools:
         for t in tools:
-            print(f"      · {t.get('name')}: {t.get('description','')[:80]}")
+            print(f"      · {t.get('name')}: {t.get('description','')[:70]}")
         return 0
 
-    # 能力发现：查库 / 列举条目 / 读正文
-    t_kb = find_tool(tools, ["知识库"], ["内容", "正文", "media"])
-    t_list = find_tool(tools, ["知识库"], []) or find_tool(tools, ["内容"], [])
-    t_read = find_tool(tools, ["正文"]) or find_tool(tools, ["读取"])
+    print(f"  可用工具: {len(tools)} 个")
 
-    if not t_kb:
-        print("  [错误] 服务端没有提供「查询知识库」能力。")
-        print("  可用工具清单：")
-        for t in tools:
-            print(f"      · {t.get('name')}")
+    print("[2/4] 定位知识库 ...")
+    kbs = client.call(
+        "get_knowledge_base_list",
+        {"params": [{"limit": 50, "type": "KBT_MINE_KB"}]},
+    ).get("knowledge_base_list", [])
+
+    want = args.only or list(TARGET_KBS)
+    targets = [kb for kb in kbs if kb.get("basic_info", {}).get("name") in want]
+    if not targets:
+        print(f"  [错误] 没找到目标知识库 {want}。")
+        print("  账号下可见的库：")
+        for kb in kbs:
+            print(f"      · {kb.get('basic_info', {}).get('name')}")
         return 1
+    print("  命中库: " + ", ".join(kb["basic_info"]["name"] for kb in targets))
 
-    print("[2/4] 定位个人知识库 ...")
-    kb_data = unwrap(client.call_tool(t_kb["name"], {}))
-    print(f"  返回类型: {type(kb_data).__name__}")
+    print("[3/4] 递归展开条目 ...")
+    all_items = []
+    for kb in targets:
+        kb_id = kb["id"]
+        kb_name = kb["basic_info"]["name"]
+        out = []
+        walk_folder(client, kb_id, "", "", out)
+        for o in out:
+            o["kb"] = kb_name
+        all_items.extend(out)
+        print(f"      {kb_name}: {len(out)} 条")
 
-    # 到这里为止是确定能跑通的部分；后续步骤依赖服务端真实结构，
-    # 首次运行时按实际返回的字段名补齐。
+    print(f"[4/4] 拉取正文并写盘（共 {len(all_items)} 条）...")
+    used: dict[str, set] = {}
+    manifest_items = []
+    for o in all_items:
+        item = o["item"]
+        kb_name = o["kb"]
+        rel_dir = os.path.join(TARGET_KBS.get(kb_name, kb_name), o["folder"].lstrip("/"))
+        os.makedirs(os.path.join(repo, rel_dir), exist_ok=True)
+        used.setdefault(rel_dir, set())
+
+        fname = safe_name(item.get("title", ""), used[rel_dir])
+        if not fname.lower().endswith(".md"):
+            fname += ".md"
+        rel_path = os.path.join(rel_dir, fname).replace("\\", "/")
+
+        try:
+            data = client.call("fetch_media_content", {"media_id": item["media_id"]})
+            content = data.get("content", data.get("raw", ""))
+        except Exception as exc:
+            print(f"      [跳过] {item.get('title')}: {exc}")
+            continue
+
+        with open(os.path.join(repo, rel_path), "w", encoding="utf-8") as f:
+            f.write(content.rstrip() + "\n")
+        print(f"      OK  {rel_path}")
+
+        manifest_items.append(
+            {
+                "media_id": item["media_id"],
+                "title": item.get("title", ""),
+                "kb": kb_name,
+                "folder": o["folder"],
+                "type": (item.get("media_type_info") or {}).get("name", ""),
+                "size": item.get("file_size", ""),
+                "path": rel_path,
+            }
+        )
+        time.sleep(0.3)
+
+    manifest = {
+        "exported_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "source": "ima 个人知识库（ima.qq.com）",
+        "total_items": len(manifest_items),
+        "items": manifest_items,
+    }
+    with open(os.path.join(meta_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+
     print()
-    print("  [提示] 已连通 ima 服务端。")
-    print("  下一步需要根据服务端真实返回结构完成条目遍历。")
-    print(f"  目标文件夹: {', '.join(folders)}")
-    print("  把上面 --list-tools 的输出发给我，我来把字段对齐。")
+    print(f"  [完成] 导出 {len(manifest_items)} 条，清单已写入 _meta\\manifest.json")
+    print("  接下来双击 sync.bat 推送到 GitHub。")
     return 0
 
 
