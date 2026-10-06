@@ -40,9 +40,13 @@ if not defined PY (
 %PY% "%REPO%tools\sync.py" --repo "%REPO%." %*
 set "RC=%ERRORLEVEL%"
 
-if not "%RC%"=="0" (
+if "%RC%"=="1" (
     echo.
     echo   [ERROR] Sync failed. Log: %REPO%_meta\sync.log
+)
+if "%RC%"=="2" (
+    echo.
+    echo   [OK] Nothing to push - already up to date.
 )
 
 if /i "%~1"=="/auto" exit /b %RC%

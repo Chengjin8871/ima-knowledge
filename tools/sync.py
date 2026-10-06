@@ -141,23 +141,35 @@ def main() -> int:
         log_write(logfile, f"[{stamp}] FAILED - git add: {out}")
         return EXIT_FAIL
 
+    has_staged = True
     rc, _ = run_git(repo, ["diff", "--cached", "--quiet"])
     if rc == 0:
-        print()
-        print("  没有检测到改动，无需推送。")
-        log_write(logfile, f"[{stamp}] no changes - skipped")
-        return EXIT_NOCHANGE
+        has_staged = False
 
     # ---------- [2/5] 统计 ----------
     print("[2/5] 统计变更...")
-    _, changed = run_git(repo, ["diff", "--cached", "--name-only"])
-    files = [l for l in changed.splitlines() if l.strip()]
-    print(f"  待提交文件: {len(files)} 个")
-    for f in files[:10]:
-        print(f"      · {f}")
-    if len(files) > 10:
-        print(f"      ...还有 {len(files) - 10} 个")
-    log_write(logfile, f"[{stamp}] staged {len(files)} file(s)")
+    if not has_staged:
+        # 工作区干净，但可能存在已 commit 尚未 push 的提交
+        rc, ahead = run_git(repo, ["rev-list", "--count", "@{u}..HEAD"])
+        n = int(ahead) if ahead.isdigit() else 0
+        if n == 0:
+            print()
+            print("  没有检测到改动，无需推送。")
+            log_write(logfile, f"[{stamp}] no changes - skipped")
+            return EXIT_NOCHANGE
+        print(f"  工作区无改动，但有 {n} 个本地提交尚未推送。")
+        log_write(logfile, f"[{stamp}] {n} local commit(s) not pushed yet")
+        files = []
+
+    else:
+        _, changed = run_git(repo, ["diff", "--cached", "--name-only"])
+        files = [l for l in changed.splitlines() if l.strip()]
+        print(f"  待提交文件: {len(files)} 个")
+        for f in files[:10]:
+            print(f"      · {f}")
+        if len(files) > 10:
+            print(f"      ...还有 {len(files) - 10} 个")
+        log_write(logfile, f"[{stamp}] staged {len(files)} file(s)")
 
     if args.dry_run:
         print()
@@ -165,13 +177,16 @@ def main() -> int:
         return EXIT_OK
 
     # ---------- [3/5] commit ----------
-    print("[3/5] 提交 (git commit) ...")
-    msg = f"ima sync {stamp} ({len(files)} files)"
-    rc, out = run_git(repo, ["commit", "-m", msg])
-    if rc != 0:
-        print(f"  [错误] git commit 失败: {out}")
-        log_write(logfile, f"[{stamp}] FAILED - git commit: {out}")
-        return EXIT_FAIL
+    if has_staged:
+        print("[3/5] 提交 (git commit) ...")
+        msg = f"ima sync {stamp} ({len(files)} files)"
+        rc, out = run_git(repo, ["commit", "-m", msg])
+        if rc != 0:
+            print(f"  [错误] git commit 失败: {out}")
+            log_write(logfile, f"[{stamp}] FAILED - git commit: {out}")
+            return EXIT_FAIL
+    else:
+        print("[3/5] 无新改动，跳过提交 ...")
 
     # ---------- [4/5] pull --rebase ----------
     print("[4/5] 拉取远端并变基 (pull --rebase) ...")
@@ -200,8 +215,9 @@ def main() -> int:
 
     print()
     print(f"  [完成] 已推送到 GitHub。  {stamp}")
-    print(f"  共提交 {len(files)} 个文件。")
-    log_write(logfile, f"[{stamp}] SUCCESS - pushed {len(files)} file(s)")
+    if has_staged:
+        print(f"  共提交 {len(files)} 个文件。")
+    log_write(logfile, f"[{stamp}] SUCCESS - pushed")
     return EXIT_OK
 
 
