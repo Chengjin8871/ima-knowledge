@@ -2,9 +2,13 @@
 
 把 **ima 个人知识库**里「**数据结构**」和「**Github**」两个文件夹的内容导出成 Markdown，并推送到 GitHub。
 
-- 远端仓库：<https://github.com/Chengjin8871/ima-knowledge>（私有）
+- 远端仓库：<https://github.com/Chengjin8871/ima-knowledge>（**公开**，2026-10-07 起）
 - 本地目录：`D:\ima-knowledge`
 - 推送方式：SSH 走 443 端口（本机 22 端口被拒）
+
+> ⚠️ 仓库是**公开**的：推进去的内容全世界可见。
+> 别把带个人信息、密钥、未公开资料的条目放进 `数据结构/` 和 `Github/`。
+> ima 授权令牌放在 `tools/.ima_token`，已在 `.gitignore` 中排除，不会入库。
 
 ## 目录结构
 
